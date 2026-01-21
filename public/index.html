@@ -889,4 +889,575 @@
             }
         }
 
+
         // ============ AUTH ============
+
+        async function register() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value;
+            
+            if (!username || !password) {
+                document.getElementById('loginMessage').textContent = 'Please fill all fields';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    currentUser = data.user;
+                    document.getElementById('loginMessage').style.color = 'var(--success)';
+                    document.getElementById('loginMessage').textContent = data.message;
+                    setTimeout(() => {
+                        document.getElementById('loginScreen').classList.remove('active');
+                        document.getElementById('gameScreen').classList.add('active');
+                        socket.emit('user:online', currentUser.id);
+                        initGame();
+                    }, 1000);
+                } else {
+                    document.getElementById('loginMessage').style.color = 'var(--danger)';
+                    document.getElementById('loginMessage').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('loginMessage').textContent = 'Connection error';
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value;
+            
+            if (!username || !password) {
+                document.getElementById('loginMessage').textContent = 'Please fill all fields';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    currentUser = data.user;
+                    document.getElementById('loginMessage').style.color = 'var(--success)';
+                    document.getElementById('loginMessage').textContent = data.message;
+                    setTimeout(() => {
+                        document.getElementById('loginScreen').classList.remove('active');
+                        document.getElementById('gameScreen').classList.add('active');
+                        socket.emit('user:online', currentUser.id);
+                        initGame();
+                    }, 1000);
+                } else {
+                    document.getElementById('loginMessage').style.color = 'var(--danger)';
+                    document.getElementById('loginMessage').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('loginMessage').textContent = 'Connection error';
+            }
+        }
+
+        async function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                await fetch(`${API_URL}/logout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUser.id })
+                });
+                
+                location.reload();
+            }
+        }
+
+        // Enter key for login
+        document.getElementById('passwordInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+
+        // ============ INIT GAME ============
+        async function initGame() {
+            updatePlayerStats();
+            await loadMyCreatures();
+            showHunt();
+        }
+
+        function updatePlayerStats() {
+            document.getElementById('playerName').textContent = currentUser.username;
+            document.getElementById('playerLevel').textContent = currentUser.level;
+            document.getElementById('playerExp').textContent = currentUser.exp;
+            document.getElementById('playerMoney').textContent = currentUser.money;
+            document.getElementById('playerBalls').textContent = currentUser.pokeballs;
+            document.getElementById('playerWins').textContent = currentUser.wins;
+            document.getElementById('playerLosses').textContent = currentUser.losses;
+            
+            const total = currentUser.wins + currentUser.losses;
+            const winRate = total > 0 ? ((currentUser.wins / total) * 100).toFixed(1) : 0;
+            document.getElementById('playerWinRate').textContent = winRate + '%';
+            
+            // Update nav
+            document.getElementById('navMoney').textContent = currentUser.money;
+            document.getElementById('navBalls').textContent = currentUser.pokeballs;
+            document.getElementById('navLevel').textContent = currentUser.level;
+        }
+
+        // ============ NAVIGATION ============
+        function hideAllViews() {
+            document.getElementById('huntView').classList.add('hidden');
+            document.getElementById('creaturesView').classList.add('hidden');
+            document.getElementById('shopView').classList.add('hidden');
+            document.getElementById('leaderboardView').classList.add('hidden');
+            document.getElementById('chatView').classList.add('hidden');
+        }
+
+        function showHunt() {
+            hideAllViews();
+            document.getElementById('huntView').classList.remove('hidden');
+        }
+
+        function showMyCreatures() {
+            hideAllViews();
+            document.getElementById('creaturesView').classList.remove('hidden');
+            loadMyCreatures();
+        }
+
+        function showShop() {
+            hideAllViews();
+            document.getElementById('shopView').classList.remove('hidden');
+        }
+
+        function showLeaderboard() {
+            hideAllViews();
+            document.getElementById('leaderboardView').classList.remove('hidden');
+            loadLeaderboard();
+        }
+
+        function showChat() {
+            hideAllViews();
+            document.getElementById('chatView').classList.remove('hidden');
+        }
+
+        // ============ MY CREATURES ============
+        async function loadMyCreatures() {
+            try {
+                const res = await fetch(`${API_URL}/creatures/${currentUser.id}`);
+                const data = await res.json();
+                myCreatures = data.creatures;
+                
+                document.getElementById('creatureCount').textContent = myCreatures.length;
+                
+                const listDiv = document.getElementById('myCreaturesList');
+                
+                if (myCreatures.length === 0) {
+                    listDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No creatures yet. Go hunt!</p>';
+                    return;
+                }
+                
+                listDiv.innerHTML = myCreatures.map(c => `
+                    <div class="creature-item ${selectedCreature && selectedCreature.id === c.id ? 'selected' : ''}" 
+                         onclick="selectCreature(${c.id})">
+                        <div class="creature-item-header">
+                            <div>
+                                <strong style="color: var(--accent);">${c.Creature.name}</strong>
+                                ${c.nickname ? `<span style="color: var(--text-secondary);"> (${c.nickname})</span>` : ''}
+                                <div class="rarity rarity-${c.Creature.rarity}">${c.Creature.rarity.toUpperCase()}</div>
+                            </div>
+                            <span class="creature-type type-${c.Creature.type}">${c.Creature.type.toUpperCase()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: var(--text-secondary);">
+                            <span>Level: ${c.level}</span>
+                            <span>HP: ${c.currentHp}/${c.maxHp}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: var(--text-secondary);">
+                            <span>ATK: ${c.attack}</span>
+                            <span>DEF: ${c.defense}</span>
+                            <span>EXP: ${c.exp}</span>
+                        </div>
+                        ${c.currentHp < c.maxHp ? '<button onclick="healCreature(' + c.id + '); event.stopPropagation();" style="margin-top: 10px; width: 100%;" class="success">💚 HEAL</button>' : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading creatures:', error);
+            }
+        }
+
+        function selectCreature(creatureId) {
+            selectedCreature = myCreatures.find(c => c.id === creatureId);
+            
+            if (!selectedCreature) return;
+            
+            const infoDiv = document.getElementById('selectedCreatureInfo');
+            infoDiv.innerHTML = `
+                <div style="text-align: center;">
+                    <h3 style="color: var(--accent); margin-bottom: 15px;">${selectedCreature.Creature.name}</h3>
+                    ${selectedCreature.nickname ? `<p style="color: var(--text-secondary);">"${selectedCreature.nickname}"</p>` : ''}
+                    <span class="creature-type type-${selectedCreature.Creature.type}" style="font-size: 1.1em; margin: 10px 0; display: inline-block;">
+                        ${selectedCreature.Creature.type.toUpperCase()}
+                    </span>
+                    <div class="rarity rarity-${selectedCreature.Creature.rarity}" style="font-size: 1em; margin: 5px 0;">
+                        ${selectedCreature.Creature.rarity.toUpperCase()}
+                    </div>
+                    
+                    <div style="margin: 20px 0;">
+                        <div class="stat-item">
+                            <span class="stat-label">Level:</span>
+                            <span class="stat-value">${selectedCreature.level}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">EXP:</span>
+                            <span class="stat-value">${selectedCreature.exp}/${selectedCreature.level * 100}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">HP:</span>
+                            <span class="stat-value">${selectedCreature.currentHp}/${selectedCreature.maxHp}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Attack:</span>
+                            <span class="stat-value">${selectedCreature.attack}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Defense:</span>
+                            <span class="stat-value">${selectedCreature.defense}</span>
+                        </div>
+                    </div>
+                    
+                    ${selectedCreature.currentHp < selectedCreature.maxHp ? 
+                        '<button onclick="healCreature(' + selectedCreature.id + ')" class="success" style="width: 100%;">💚 HEAL</button>' : 
+                        '<p style="color: var(--success);">✅ Healthy!</p>'}
+                </div>
+            `;
+            
+            loadMyCreatures();
+        }
+
+        async function healCreature(creatureId) {
+            try {
+                const res = await fetch(`${API_URL}/heal/${creatureId}`, { method: 'POST' });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    await loadMyCreatures();
+                    if (selectedCreature && selectedCreature.id === creatureId) {
+                        selectCreature(creatureId);
+                    }
+                    alert('Creature healed!');
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Heal error:', error);
+            }
+        }
+
+        // ============ HUNT & BATTLE ============
+        async function startHunt() {
+            if (!selectedCreature) {
+                alert('Select a creature from MY CREATURES first!');
+                return;
+            }
+            
+            if (selectedCreature.currentHp <= 0) {
+                alert('Your creature needs healing!');
+                return;
+            }
+            
+            if (battleInProgress) return;
+            
+            try {
+                const res = await fetch(`${API_URL}/hunt`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userId: currentUser.id,
+                        selectedCreatureId: selectedCreature.id 
+                    })
+                });
+                
+                const data = await res.json();
+                currentEnemy = data.creature;
+                currentEnemyMaxHp = currentEnemy.baseHp;
+                
+                document.getElementById('huntStatus').textContent = data.message;
+                document.getElementById('battleSection').classList.remove('hidden');
+                document.getElementById('huntButton').disabled = true;
+                
+                // Update displays
+                updateBattleDisplay();
+                
+                battleInProgress = true;
+                document.getElementById('battleLog').innerHTML = 
+                    '<div class="log-entry">Battle started!</div>';
+            } catch (error) {
+                console.error('Hunt error:', error);
+            }
+        }
+
+        function updateBattleDisplay() {
+            // My creature
+            document.getElementById('myCreatureName').textContent = selectedCreature.Creature.name;
+            document.getElementById('myCreatureType').textContent = selectedCreature.Creature.type.toUpperCase();
+            document.getElementById('myCreatureType').className = `creature-type type-${selectedCreature.Creature.type}`;
+            document.getElementById('myCreatureLevel').textContent = selectedCreature.level;
+            document.getElementById('myCreatureAtk').textContent = selectedCreature.attack;
+            document.getElementById('myCreatureDef').textContent = selectedCreature.defense;
+            
+            const myHpPercent = (selectedCreature.currentHp / selectedCreature.maxHp) * 100;
+            document.getElementById('myCreatureHp').style.width = myHpPercent + '%';
+            document.getElementById('myCreatureHpText').textContent = 
+                `${selectedCreature.currentHp}/${selectedCreature.maxHp}`;
+            
+            // Enemy
+            document.getElementById('enemyCreatureName').textContent = currentEnemy.name;
+            document.getElementById('enemyCreatureType').textContent = currentEnemy.type.toUpperCase();
+            document.getElementById('enemyCreatureType').className = `creature-type type-${currentEnemy.type}`;
+            document.getElementById('enemyCreatureAtk').textContent = currentEnemy.baseAttack;
+            document.getElementById('enemyCreatureDef').textContent = currentEnemy.baseDefense;
+            
+            const enemyHpPercent = (currentEnemy.baseHp / currentEnemyMaxHp) * 100;
+            document.getElementById('enemyCreatureHp').style.width = enemyHpPercent + '%';
+            document.getElementById('enemyCreatureHpText').textContent = 
+                `${currentEnemy.baseHp}/${currentEnemyMaxHp}`;
+        }
+
+        async function attackTurn() {
+            if (!battleInProgress) return;
+            
+            document.getElementById('attackButton').disabled = true;
+            
+            try {
+                const res = await fetch(`${API_URL}/battle/attack`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userCreatureId: selectedCreature.id,
+                        enemyCreatureId: currentEnemy.id,
+                        enemyCurrentHp: currentEnemy.baseHp,
+                        enemyMaxHp: currentEnemyMaxHp,
+                        isWildBattle: true
+                    })
+                });
+                
+                const data = await res.json();
+                
+                // Update logs
+                data.battleLog.forEach(log => {
+                    const logDiv = document.getElementById('battleLog');
+                    logDiv.innerHTML += `<div class="log-entry">${log}</div>`;
+                    logDiv.scrollTop = logDiv.scrollHeight;
+                });
+                
+                // Update HPs
+                selectedCreature.currentHp = data.playerHp;
+                currentEnemy.baseHp = data.enemyHp;
+                
+                updateBattleDisplay();
+                
+                if (data.won) {
+                    await completeBattle(true);
+                } else if (data.lost) {
+                    await completeBattle(false);
+                } else {
+                    document.getElementById('attackButton').disabled = false;
+                }
+            } catch (error) {
+                console.error('Attack error:', error);
+                document.getElementById('attackButton').disabled = false;
+            }
+        }
+
+        async function completeBattle(won) {
+            try {
+                const res = await fetch(`${API_URL}/battle/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        userCreatureId: selectedCreature.id,
+                        won: won,
+                        enemyName: currentEnemy.name,
+                        isPvP: false
+                    })
+                });
+                
+                const data = await res.json();
+                
+                // Update logs
+                const logDiv = document.getElementById('battleLog');
+                logDiv.innerHTML += `<div class="log-entry" style="color: ${won ? 'var(--success)' : 'var(--danger)'}; font-weight: bold;">${data.message}</div>`;
+                
+                data.battleLog.forEach(log => {
+                    logDiv.innerHTML += `<div class="log-entry" style="color: var(--warning);">${log}</div>`;
+                });
+                
+                logDiv.scrollTop = logDiv.scrollHeight;
+                
+                // FIXED: Update user data properly
+                currentUser.level = data.user.level;
+                currentUser.exp = data.user.exp;
+                currentUser.money = data.user.money;
+                currentUser.wins = data.user.wins;
+                currentUser.losses = data.user.losses;
+                updatePlayerStats();
+                
+                // Update creature data
+                selectedCreature.currentHp = data.userCreature.hp;
+                selectedCreature.maxHp = data.userCreature.maxHp;
+                selectedCreature.level = data.userCreature.level;
+                selectedCreature.exp = data.userCreature.exp;
+                selectedCreature.attack = data.userCreature.attack;
+                selectedCreature.defense = data.userCreature.defense;
+                
+                // FIXED: Reload creatures to get fresh data from server
+                await loadMyCreatures();
+                selectCreature(selectedCreature.id);
+                
+                // Disable battle buttons
+                document.getElementById('attackButton').disabled = true;
+                document.getElementById('catchButton').disabled = true;
+                
+                setTimeout(() => {
+                    endBattle();
+                }, 3000);
+            } catch (error) {
+                console.error('Complete battle error:', error);
+            }
+        }
+
+        async function attemptCatch() {
+            if (currentUser.pokeballs <= 0) {
+                alert('No Pokéballs left! Buy more from the shop.');
+                return;
+            }
+            
+            document.getElementById('catchButton').disabled = true;
+            
+            try {
+                const res = await fetch(`${API_URL}/catch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        creatureId: currentEnemy.id,
+                        currentHp: currentEnemy.baseHp,
+                        maxHp: currentEnemyMaxHp
+                    })
+                });
+                
+                const data = await res.json();
+                
+                currentUser.pokeballs = data.pokeballsLeft;
+                updatePlayerStats();
+                
+                const logDiv = document.getElementById('battleLog');
+                logDiv.innerHTML += `<div class="log-entry" style="color: ${data.success ? 'var(--success)' : 'var(--warning)'};">${data.message}</div>`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+                
+                if (data.success) {
+                    await loadMyCreatures();
+                    setTimeout(() => {
+                        endBattle();
+                    }, 2000);
+                } else {
+                    document.getElementById('catchButton').disabled = false;
+                }
+            } catch (error) {
+                console.error('Catch error:', error);
+                document.getElementById('catchButton').disabled = false;
+            }
+        }
+
+        function flee() {
+            if (confirm('Are you sure you want to flee?')) {
+                const logDiv = document.getElementById('battleLog');
+                logDiv.innerHTML += '<div class="log-entry" style="color: var(--warning);">You fled from battle!</div>';
+                setTimeout(() => {
+                    endBattle();
+                }, 1000);
+            }
+        }
+
+        function endBattle() {
+            battleInProgress = false;
+            document.getElementById('battleSection').classList.add('hidden');
+            document.getElementById('huntButton').disabled = false;
+            document.getElementById('attackButton').disabled = false;
+            document.getElementById('catchButton').disabled = false;
+            document.getElementById('huntStatus').textContent = 'Select a creature and hunt again!';
+            currentEnemy = null;
+        }
+
+        // ============ SHOP ============
+        async function buyItem(itemId) {
+            try {
+                const res = await fetch(`${API_URL}/shop/buy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        itemId: itemId
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    currentUser.money = data.user.money;
+                    currentUser.pokeballs = data.user.pokeballs;
+                    updatePlayerStats();
+                    alert(data.message);
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Shop error:', error);
+                alert('Error purchasing item. Please try again.');
+            }
+        }
+
+        // ============ LEADERBOARD ============
+        async function loadLeaderboard() {
+            try {
+                const res = await fetch(`${API_URL}/leaderboard`);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('leaderboardBody');
+                tbody.innerHTML = data.leaderboard.map((player, index) => {
+                    // FIXED: Check if player's USER ID is in online users (not username)
+                    const isOnline = onlineUsers.includes(player.userId) || player.isOnline;
+                    const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                    const isCurrentUser = currentUser.username === player.username;
+                    
+                    return `
+                        <tr style="${isCurrentUser ? 'background: rgba(91, 127, 255, 0.1);' : ''}">
+                            <td class="${rankClass}">${index + 1}</td>
+                            <td>
+                                ${isOnline ? '<span class="online-indicator"></span>' : ''}
+                                ${player.username}
+                                ${isCurrentUser ? ' (You)' : ''}
+                            </td>
+                            <td>${player.level}</td>
+                            <td>${player.wins}W - ${player.losses}L</td>
+                            <td>${player.winRate}</td>
+                            <td>
+                                ${!isCurrentUser && isOnline && selectedCreature && selectedCreature.currentHp > 0 ? 
+                                    `<button class="challenge-btn warning" onclick="challengePlayer(${player.userId}, '${player.username}')">⚔️ Challenge</button>` : 
+                                    '-'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Leaderboard error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
