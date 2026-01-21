@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Creature Battle Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #1a1d29;
+            --bg-secondary: #252837;
+            --bg-tertiary: #2f3349;
+            --text-primary: #ffffff;
+            --text-secondary: #b8bcc8;
+            --accent: #5b7fff;
+            --accent-hover: #4a66ff;
+            --success: #4caf50;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --border: #3d4258;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            font-size: 2.5em;
+            margin-bottom: 30px;
+        }
+
+        .game-screen {
+            display: none;
+        }
+
+        .game-screen.active {
+            display: block;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            text-align: center;
+            padding: 50px;
+        }
+
+        .login-box {
+            background: var(--bg-secondary);
+            padding: 40px;
+            border-radius: 15px;
+            max-width: 400px;
+            margin: 0 auto;
+            border: 2px solid var(--border);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 1.1em;
+            border-radius: 8px;
+            transition: border 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        button {
+            padding: 12px 24px;
+            margin: 10px 5px;
+            border: none;
+            background: var(--accent);
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(91, 127, 255, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.danger {
+            background: var(--danger);
+        }
+
+        button.success {
+            background: var(--success);
+        }
+
+        button.warning {
+            background: var(--warning);
+        }
+
+        /* Main Game Screen */
+        .nav-bar {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--border);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .user-stats-mini {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            color: var(--text-secondary);
+        }
+
+        .stat-badge {
+            background: var(--bg-tertiary);
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+
+        .stat-badge strong {
+            color: var(--accent);
+            margin-left: 5px;
+        }
+
+        .main-game {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 20px;
+        }
+
+        .panel {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        .panel h2 {
+            color: var(--accent);
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        /* Stats Panel */
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        /* Battle Arena */
+        .battle-arena {
+            text-align: center;
+        }
+
+        .battle-status {
+            background: var(--bg-tertiary);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            min-height: 60px;
+            font-size: 1.2em;
+            color: var(--warning);
+            border: 1px solid var(--border);
+        }
+
+        .creatures-display {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 30px 0;
+            gap: 20px;
+        }
+
+        .creature-box {
+            background: var(--bg-tertiary);
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid var(--accent);
+            min-width: 220px;
+            flex: 1;
+            max-width: 350px;
+        }
+
+        .creature-box.enemy {
+            border-color: var(--danger);
+        }
+
+        .creature-name {
+            font-size: 1.5em;
+            color: var(--accent);
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .creature-box.enemy .creature-name {
+            color: var(--danger);
+        }
+
+        .hp-bar {
+            width: 100%;
+            height: 25px;
+            background: var(--bg-primary);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 10px 0;
+            border: 2px solid var(--border);
+        }
+
+        .hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), #45a049);
+            transition: width 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .creature-box.enemy .hp-fill {
+            background: linear-gradient(90deg, var(--danger), #d32f2f);
+        }
+
+        .battle-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .battle-log {
+            background: var(--bg-tertiary);
+            padding: 15px;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            margin-top: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        /* My Creatures Panel */
+        .creature-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .creature-item {
+            background: var(--bg-tertiary);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .creature-item:hover {
+            border-color: var(--accent);
+            transform: translateX(5px);
+        }
+
+        .creature-item.selected {
+            border-color: var(--accent);
+            background: rgba(91, 127, 255, 0.15);
+        }
+
+        .creature-item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .creature-type {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: white;
+        }
+
+        .type-fire { background: #f44336; }
+        .type-water { background: #2196f3; }
+        .type-grass { background: #4caf50; }
+        .type-electric { background: #ffeb3b; color: #000; }
+        .type-earth { background: #795548; }
+
+        .rarity {
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+
+        .rarity-common { color: #9e9e9e; }
+        .rarity-uncommon { color: #4caf50; }
+        .rarity-rare { color: #2196f3; }
+        .rarity-epic { color: #9c27b0; }
+        .rarity-legendary { background: linear-gradient(90deg, #ff9800, #ffc107);  -webkit-text-fill-color: transparent; }
+
+        /* Shop */
+        .shop-items {
+            display: grid;
+            gap: 15px;
+        }
+
+        .shop-item {
+            background: var(--bg-tertiary);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .shop-item-info {
+            flex: 1;
+        }
+
+        .shop-item-price {
+            color: var(--warning);
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-right: 15px;
+        }
+
+        /* Chat */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 400px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--bg-tertiary);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .chat-username {
+            color: var(--accent);
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .chat-text {
+            color: var(--text-secondary);
+        }
+
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-container input {
+            flex: 1;
+            margin: 0;
+        }
+
+        /* Leaderboard */
+        .leaderboard-table {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+        }
+
+        .leaderboard-table th,
+        .leaderboard-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .leaderboard-table th {
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+            font-weight: 600;
+        }
+
+        .leaderboard-table tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .rank-1 { color: #ffd700; }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
+
+        .online-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .challenge-btn {
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .vs-text {
+            font-size: 2.5em;
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid var(--border);
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            color: var(--accent);
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-game {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-bar {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .creatures-display {
+                flex-direction: column;
+            }
+
+            .vs-text {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚔️ CREATURE BATTLE ARENA ⚔️</h1>
+
+        <!-- Login Screen -->
+        <div id="loginScreen" class="game-screen active">
+            <div class="login-screen">
+                <div class="login-box">
+                    <h2 style="color: var(--accent); margin-bottom: 20px;">ENTER THE ARENA</h2>
+                    <input type="text" id="usernameInput" placeholder="Enter Username" />
+                    <input type="password" id="passwordInput" placeholder="Enter Password" />
+                    <div>
+                        <button onclick="login()">LOGIN</button>
+                        <button onclick="register()">REGISTER</button>
+                    </div>
+                    <p id="loginMessage" style="margin-top: 20px; color: var(--danger);"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Game Screen -->
+        <div id="gameScreen" class="game-screen">
+            <div class="nav-bar">
+                <div class="nav-buttons">
+                    <button onclick="showHunt()">🎯 HUNT</button>
+                    <button onclick="showMyCreatures()">📦 MY CREATURES</button>
+                    <button onclick="showShop()">🛒 SHOP</button>
+                    <button onclick="showLeaderboard()">🏆 LEADERBOARD</button>
+                    <button onclick="showChat()">💬 CHAT</button>
+                    <button class="danger" onclick="logout()">🚪 LOGOUT</button>
+                </div>
+                <div class="user-stats-mini">
+                    <span class="stat-badge">💰 Money: <strong id="navMoney">0</strong></span>
+                    <span class="stat-badge">⚾ Balls: <strong id="navBalls">0</strong></span>
+                    <span class="stat-badge">Level: <strong id="navLevel">1</strong></span>
+                </div>
+            </div>
+
+            <div class="main-game">
+                <!-- Left Panel: Player Stats -->
+                <div class="panel">
+                    <h2>👤 TRAINER</h2>
+                    <div class="stat-item">
+                        <span class="stat-label">Name:</span>
+                        <span class="stat-value" id="playerName">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Level:</span>
+                        <span class="stat-value" id="playerLevel">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">EXP:</span>
+                        <span class="stat-value" id="playerExp">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Money:</span>
+                        <span class="stat-value" id="playerMoney">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Pokéballs:</span>
+                        <span class="stat-value" id="playerBalls">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Wins:</span>
+                        <span class="stat-value" id="playerWins">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Losses:</span>
+                        <span class="stat-value" id="playerLosses">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Win Rate:</span>
+                        <span class="stat-value" id="playerWinRate">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Creatures:</span>
+                        <span class="stat-value" id="creatureCount">-</span>
+                    </div>
+                </div>
+
+                <!-- Center: Battle Arena / Views -->
+                <div class="panel battle-arena" style="min-height: 600px;">
+                    <!-- Hunt View -->
+                    <div id="huntView">
+                        <h2>🎯 HUNT FOR CREATURES</h2>
+                        <div class="battle-status" id="huntStatus">
+                            Select a creature from MY CREATURES, then click HUNT!
+                        </div>
+                        <button onclick="startHunt()" id="huntButton" style="font-size: 1.2em; padding: 15px 40px;">
+                            🔍 HUNT
+                        </button>
+
+                        <!-- Battle Section -->
+                        <div id="battleSection" class="hidden">
+                            <div class="creatures-display">
+                                <div class="creature-box">
+                                    <div class="creature-name" id="myCreatureName">My Creature</div>
+                                    <div class="creature-type" id="myCreatureType">Type</div>
+                                    <div style="margin: 5px 0;">Level: <span id="myCreatureLevel">1</span></div>
+                                    <div class="hp-bar">
+                                        <div class="hp-fill" id="myCreatureHp" style="width: 100%;">
+                                            <span id="myCreatureHpText">100/100</span>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.9em; color: var(--text-secondary);">ATK: <span id="myCreatureAtk">0</span> | DEF: <span id="myCreatureDef">0</span></div>
+                                </div>
+
+                                <div class="vs-text">VS</div>
+
+                                <div class="creature-box enemy">
+                                    <div class="creature-name" id="enemyCreatureName">Enemy</div>
+                                    <div class="creature-type" id="enemyCreatureType">Type</div>
+                                    <div class="hp-bar">
+                                        <div class="hp-fill" id="enemyCreatureHp" style="width: 100%;">
+                                            <span id="enemyCreatureHpText">100/100</span>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.9em; color: var(--text-secondary);">ATK: <span id="enemyCreatureAtk">0</span> | DEF: <span id="enemyCreatureDef">0</span></div>
+                                </div>
+                            </div>
+
+                            <div class="battle-actions">
+                                <button onclick="attackTurn()" id="attackButton">⚔️ ATTACK</button>
+                                <button onclick="attemptCatch()" id="catchButton" class="success">⚾ CATCH (Uses 1 Ball)</button>
+                                <button onclick="flee()" class="danger">🏃 FLEE</button>
+                            </div>
+
+                            <div class="battle-log" id="battleLog"></div>
+                        </div>
+                    </div>
+
+                    <!-- My Creatures View -->
+                    <div id="creaturesView" class="hidden">
+                        <h2>📦 MY CREATURES</h2>
+                        <div class="creature-list" id="myCreaturesList">
+                            <p style="text-align: center; color: var(--text-secondary);">No creatures yet. Go hunt!</p>
+                        </div>
+                    </div>
+
+                    <!-- Shop View -->
+                    <div id="shopView" class="hidden">
+                        <h2>🛒 SHOP</h2>
+                        <div class="shop-items">
+                            <div class="shop-item">
+                                <div class="shop-item-info">
+                                    <strong>⚾ 1 Pokéball</strong>
+                                    <div style="color: var(--text-secondary); font-size: 0.9em;">Catch wild creatures</div>
+                                </div>
+                                <span class="shop-item-price">💰 50</span>
+                                <button onclick="buyItem('pokeball')">BUY</button>
+                            </div>
+                            <div class="shop-item">
+                                <div class="shop-item-info">
+                                    <strong>⚾ 5 Pokéballs</strong>
+                                    <div style="color: var(--text-secondary); font-size: 0.9em;">Bulk discount!</div>
+                                </div>
+                                <span class="shop-item-price">💰 200</span>
+                                <button onclick="buyItem('pokeball_5')">BUY</button>
+                            </div>
+                            <div class="shop-item">
+                                <div class="shop-item-info">
+                                    <strong>⚾ 10 Pokéballs</strong>
+                                    <div style="color: var(--text-secondary); font-size: 0.9em;">Best value!</div>
+                                </div>
+                                <span class="shop-item-price">💰 350</span>
+                                <button onclick="buyItem('pokeball_10')">BUY</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leaderboard View -->
+                    <div id="leaderboardView" class="hidden">
+                        <h2>🏆 LEADERBOARD</h2>
+                        <table class="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Trainer</th>
+                                    <th>Level</th>
+                                    <th>Record</th>
+                                    <th>Win Rate</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboardBody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Chat View -->
+                    <div id="chatView" class="hidden">
+                        <h2>💬 GLOBAL CHAT</h2>
+                        <div class="chat-container">
+                            <div class="chat-messages" id="chatMessages">
+                                <p style="text-align: center; color: var(--text-secondary);">Welcome to global chat!</p>
+                            </div>
+                            <div class="chat-input-container">
+                                <input type="text" id="chatInput" placeholder="Type a message..." maxlength="200" />
+                                <button onclick="sendMessage()">SEND</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Selected Creature Info -->
+                <div class="panel">
+                    <h2>⭐ SELECTED CREATURE</h2>
+                    <div id="selectedCreatureInfo">
+                        <p style="text-align: center; color: var(--text-secondary);">Select a creature to view details</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Challenge Modal -->
+        <div id="challengeModal" class="modal">
+            <div class="modal-content">
+                <h3>⚔️ Battle Challenge!</h3>
+                <p id="challengeText" style="margin: 20px 0; color: var(--text-secondary);"></p>
+                <div>
+                    <button onclick="acceptChallenge()" class="success">ACCEPT</button>
+                    <button onclick="declineChallenge()" class="danger">DECLINE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        const socket = io('http://localhost:3000');
+        
+        let currentUser = null;
+        let myCreatures = [];
+        let selectedCreature = null;
+        let currentEnemy = null;
+        let currentEnemyMaxHp = 100;
+        let battleInProgress = false;
+        let onlineUsers = [];
+        let pendingChallenge = null;
+
+        // ============ WEBSOCKET ============
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            if (currentUser) {
+                socket.emit('user:online', currentUser.id);
+            }
+        });
+
+        socket.on('users:update', (users) => {
+            onlineUsers = users;
+            if (document.getElementById('leaderboardView').classList.contains('hidden') === false) {
+                showLeaderboard();
+            }
+        });
+
+        socket.on('chat:message', (data) => {
+            addChatMessage(data.username, data.message);
+        });
+
+        socket.on('challenge:received', (data) => {
+            pendingChallenge = data;
+            document.getElementById('challengeText').textContent = 
+                `${data.challengerName} challenges you to battle!`;
+            document.getElementById('challengeModal').classList.add('active');
+        });
+
+        socket.on('challenge:accepted', (data) => {
+            alert(`${data.opponentName} accepted your challenge! (PvP battles coming soon)`);
+        });
+
+        socket.on('challenge:declined', (data) => {
+            alert(`${data.challengedName} declined your challenge.`);
+        });
+
+        // ============ CHAT ============
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (message && currentUser) {
+                socket.emit('chat:message', {
+                    userId: currentUser.id,
+                    message: message
+                });
+                input.value = '';
+            }
+        }
+
+        function addChatMessage(username, message) {
+            const chatDiv = document.getElementById('chatMessages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'chat-message';
+            msgDiv.innerHTML = `<span class="chat-username">${username}:</span><span class="chat-text">${message}</span>`;
+            chatDiv.appendChild(msgDiv);
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
+
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // ============ CHALLENGE ============
+        function challengePlayer(opponentId, opponentName) {
+            if (!selectedCreature || selectedCreature.currentHp <= 0) {
+                alert('Select a healthy creature first!');
+                return;
+            }
+            
+            socket.emit('challenge:send', {
+                challengerId: currentUser.id,
+                challengedId: opponentId
+            });
+            
+            alert(`Challenge sent to ${opponentName}!`);
+        }
+
+        function acceptChallenge() {
+            if (pendingChallenge) {
+                socket.emit('challenge:response', {
+                    challengeId: pendingChallenge.challengeId,
+                    accepted: true
+                });
+                document.getElementById('challengeModal').classList.remove('active');
+                alert('Challenge accepted! (PvP battles coming soon)');
+                pendingChallenge = null;
+            }
+        }
+
+        function declineChallenge() {
+            if (pendingChallenge) {
+                socket.emit('challenge:response', {
+                    challengeId: pendingChallenge.challengeId,
+                    accepted: false
+                });
+                document.getElementById('challengeModal').classList.remove('active');
+                pendingChallenge = null;
+            }
+        }
+
+        // ============ AUTH ============
